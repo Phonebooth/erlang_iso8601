@@ -2,6 +2,7 @@
 
 -export([add_time/4,
          format/1,
+         format_exact/1,
          parse/1,
          parse_exact/1]).
 
@@ -40,6 +41,12 @@ format({{Y,Mo,D}, {H,Mn,S}}) ->
     FmtStr = "~4.10.0B-~2.10.0B-~2.10.0BT~2.10.0B:~2.10.0B:~2.10.0BZ",
     IsoStr = io_lib:format(FmtStr, [Y, Mo, D, H, Mn, S]),
     list_to_binary(IsoStr).
+
+-spec format_exact (timestamp()) -> binary().
+format_exact({_,_,MicroSecs}=Timestamp) ->
+    {{Y,Mo,D}, {H,Mn,S}} = calendar:now_to_datetime(Timestamp),
+    format({{Y,Mo,D}, {H,Mn,S+(MicroSecs / 1000000)}}).
+
 
 -spec parse (string()) -> datetime().
 %% @doc Convert an ISO 8601 formatted string to a `{date(), time()}' tuple
