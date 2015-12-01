@@ -4,7 +4,8 @@
          format/1,
          format_exact/1,
          parse/1,
-         parse_exact/1]).
+         parse_exact/1,
+         parse_exact_to_now/1]).
 
 -export_types([datetime/0,
                timestamp/0]).
@@ -64,6 +65,22 @@ parse_exact(Bin) when is_binary(Bin) ->
 parse_exact(Str) ->
     {{Date, {H, M, S}}, SecondsDecimal} = year(Str, []),
     {Date, {H, M, S + SecondsDecimal}}.
+
+-spec parse_exact_to_now (string()) -> tuple().
+%% @doc Convert an ISO 8601 formatted string to a
+%% `{integer(), integer(), integer()}' tuple with
+%% megaseconds, seconds, and microseconds units,
+%% respectively.
+parse_exact_to_now(Bin) when is_binary(Bin) ->
+    parse_exact_to_now(binary_to_list(Bin));
+parse_exact_to_now(Str) ->
+    {Datetime, SecondsDecimal} = year(Str, []),
+    Greg = calendar:datetime_to_gregorian_seconds(Datetime),
+    UnixSeconds = Greg - 62167219200,
+    E6 = 1000000,
+    {Mega, Seconds} = {UnixSeconds div E6,
+                          UnixSeconds rem E6},
+    {Mega, Seconds, trunc(SecondsDecimal * E6)}.
 
 %% Private functions
 
