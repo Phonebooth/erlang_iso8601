@@ -3,11 +3,13 @@
 -export([add_time/4,
          format/1,
          format_exact/1,
+         now_to_datetime_exact/1,
          parse/1,
          parse_exact/1,
          parse_exact_to_now/1]).
 
 -export_types([datetime/0,
+               datetime_exact/0,
                timestamp/0]).
 
 -define(MIDNIGHT, {0,0,0}).
@@ -46,11 +48,16 @@ format({{Y,Mo,D}, {H,Mn,S}}) ->
     IsoStr = io_lib:format(FmtStr, [Y, Mo, D, H, Mn, S]),
     list_to_binary(IsoStr).
 
--spec format_exact (timestamp()) -> binary().
+-spec format_exact (timestamp() | datetime_exact()) -> binary().
 format_exact({_,_,MicroSecs}=Timestamp) ->
     {{Y,Mo,D}, {H,Mn,S}} = calendar:now_to_datetime(Timestamp),
-    format({{Y,Mo,D}, {H,Mn,S+(MicroSecs / 1000000)}}).
+    format({{Y,Mo,D}, {H,Mn,S+(MicroSecs / 1000000)}});
+format_exact({{_,_,_}, {_,_,_}}=Datetime) ->
+    format(Datetime).
 
+-spec now_to_datetime_exact(timestamp()) -> datetime_exact().
+now_to_datetime_exact(Timestamp) ->
+    parse_exact(format_exact(Timestamp)).
 
 -spec parse (string()) -> datetime().
 %% @doc Convert an ISO 8601 formatted string to a `{date(), time()}' tuple
@@ -60,7 +67,7 @@ parse(Str) ->
     {{Date, {H, M, S}}, Subsecond} = year(Str, []),
     {Date, {H, M, S + round(Subsecond)}}.
 
--spec parse_exact (string()) -> datetime().
+-spec parse_exact (string()) -> datetime_exact().
 %% @doc Convert an ISO 8601 formatted string to a `{date(), time()}'
 %% tuple with seconds precision to 3 decimal palces
 parse_exact(Bin) when is_binary(Bin) ->
