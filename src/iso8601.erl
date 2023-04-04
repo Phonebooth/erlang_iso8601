@@ -8,18 +8,21 @@
          parse_exact/1,
          parse_exact_to_now/1]).
 
--export_types([datetime/0,
-               datetime_exact/0,
-               timestamp/0]).
+-export_type([datetime/0,
+              datetime_exact/0,
+              timestamp/0]).
 
 -define(MIDNIGHT, {0,0,0}).
 -define(V, proplists:get_value).
 
+
+-type hour()     :: 0..23.
+-type minute()   :: 0..59.
 -type microseconds() :: float().
 -type datetime() :: {Date::calendar:date(),
                           Time::calendar:time()}.
 -type datetime_exact() :: {Date::calendar:date(),
-                                 Time::{calendar:hour(),calendar:minute(),microseconds()}}.
+                                 Time::{hour(),minute(),microseconds()}}.
 -type datetime_plist() :: list({atom(), integer()}).
 -type maybe(A) :: undefined | A.
 -type timestamp() :: {MegaSecs::integer(),
