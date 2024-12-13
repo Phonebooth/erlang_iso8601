@@ -24,7 +24,7 @@
 -type datetime_exact() :: {Date::calendar:date(),
                                  Time::{hour(),minute(),microseconds()}}.
 -type datetime_plist() :: list({atom(), integer()}).
--type maybe(A) :: undefined | A.
+-type 'maybe'(A) :: undefined | A.
 -type timestamp() :: {MegaSecs::integer(),
                            Secs::integer(),
                            MicroSecs::integer() | float()}.
@@ -271,8 +271,8 @@ make_date(Plist) ->
     make_date(Year, ?V(month, Plist, 1), ?V(week, Plist), Plist).
 
 -spec make_date (non_neg_integer(),
-                 maybe(pos_integer()),
-                 maybe(pos_integer()),
+                 'maybe'(pos_integer()),
+                 'maybe'(pos_integer()),
                  datetime_plist())
                 -> {calendar:date(), non_neg_integer()}.
 %% @doc Return a `tuple' containing a date and - if the date is in week format
