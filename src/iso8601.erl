@@ -2,10 +2,14 @@
 
 -export([add_time/4,
          format/1,
+         format/2,
          format_exact/1,
+         format_exact/2,
          now_to_datetime_exact/1,
          parse/1,
          parse_exact/1,
+         parse_local/1,
+         parse_local_exact/1,
          parse_exact_to_now/1]).
 
 -export_type([datetime/0,
@@ -28,27 +32,45 @@
 -type timestamp() :: {MegaSecs::integer(),
                            Secs::integer(),
                            MicroSecs::integer() | float()}.
+-type offset() :: integer() | binary() | string().
 
 %% API
 
 -spec add_time (datetime(), integer(), integer(), integer()) -> datetime().
 %% @doc Add some time to the supplied `datetime()'.
 add_time(Datetime, H, M, S) ->
-    apply_offset(Datetime, H, M, S).
+    {Datetime2, _OffsetSec} = apply_offset(Datetime, H, M, S),
+    Datetime2.
 
 -spec format (datetime() | timestamp() | datetime_exact()) -> binary().
 %% @doc Convert a `util:timestamp()' or a calendar-style `{date(), time()}'
 %% tuple to an ISO 8601 formatted string. Note that this function always
 %% returns a string with no offset (i.e., ending in "Z").
-format({_,_,_}=Timestamp) ->
-    format(calendar:now_to_datetime(Timestamp));
-format({{Y,Mo,D}, {H,Mn,S}}) when is_float(S) ->
-    FmtStr = "~4.10.0B-~2.10.0B-~2.10.0BT~2.10.0B:~2.10.0B:~9.6.0fZ",
-    IsoStr = io_lib:format(FmtStr, [Y, Mo, D, H, Mn, S]),
+format(Input) ->
+    format(Input, "Z").
+    
+%% @doc Convert a UTC datetime or timestamp into ISO 8601 formatted string
+%% with an offset. For GMT/Zulu, provide the timestamp along with "Z". 
+%% 
+%% If the offset() is an integer, the timestamp is adjusted to localize it.
+%% If the offset() is a string, there is no adjustment.
+-spec format (datetime() | timestamp() | datetime_exact(), offset()) -> binary().
+format({_,_,_}=Timestamp, Offset) ->
+    format(calendar:now_to_datetime(Timestamp), Offset);
+format({Date1, {H1, Mn1, S1}}, Offset) when is_integer(Offset) ->
+    S2 = trunc(S1),
+    % SubS is either integer 0 or float < 1
+    SubS = S1-S2,
+    {{Date2, {H2, Mn2, S3}}, _} = apply_offset({Date1, {H1, Mn1, S2}}, 0, 0, Offset),
+    OffsetStr = format_offset(Offset),
+    format({Date2, {H2, Mn2, S3+SubS}}, OffsetStr);
+format({{Y,Mo,D}, {H,Mn,S}}, Offset) when is_float(S) ->
+    FmtStr = "~4.10.0B-~2.10.0B-~2.10.0BT~2.10.0B:~2.10.0B:~9.6.0f~s",
+    IsoStr = io_lib:format(FmtStr, [Y, Mo, D, H, Mn, S, format_offset(Offset)]),
     list_to_binary(IsoStr);
-format({{Y,Mo,D}, {H,Mn,S}}) ->
-    FmtStr = "~4.10.0B-~2.10.0B-~2.10.0BT~2.10.0B:~2.10.0B:~2.10.0BZ",
-    IsoStr = io_lib:format(FmtStr, [Y, Mo, D, H, Mn, S]),
+format({{Y,Mo,D}, {H,Mn,S}}, Offset) ->
+    FmtStr = "~4.10.0B-~2.10.0B-~2.10.0BT~2.10.0B:~2.10.0B:~2.10.0B~s",
+    IsoStr = io_lib:format(FmtStr, [Y, Mo, D, H, Mn, S, format_offset(Offset)]),
     list_to_binary(IsoStr).
 
 -spec format_exact (timestamp() | datetime_exact() | datetime()) -> binary().
@@ -58,26 +80,55 @@ format_exact({_,_,MicroSecs}=Timestamp) ->
 format_exact({{_,_,_}, {_,_,_}}=Datetime) ->
     format(Datetime).
 
+-spec format_exact(timestamp() | datetime_exact() | datetime(), offset()) -> binary().
+format_exact({_,_,MicroSecs}=Timestamp, Offset) ->
+    {{Y,Mo,D}, {H,Mn,S}} = calendar:now_to_datetime(Timestamp),
+    format({{Y,Mo,D}, {H,Mn,S+(MicroSecs / 1000000)}}, Offset);
+format_exact({{_,_,_}, {_,_,_}}=Datetime, Offset) ->
+    format(Datetime, Offset).
+
+format_offset(OffsetSec) when is_integer(OffsetSec) ->
+    PlusOrMinus = if OffsetSec < 0 -> "-"; true -> "+" end,
+    H = abs(OffsetSec) div (60*60),
+    Rem = abs(OffsetSec) rem (60*60),
+    Mi = Rem div 60,
+    iolist_to_binary(io_lib:format("~s~2.10.0B:~2.10.0B", [PlusOrMinus, H, Mi]));
+format_offset(String) ->
+    String.
+
 -spec now_to_datetime_exact(timestamp()) -> datetime_exact().
 now_to_datetime_exact(Timestamp) ->
     parse_exact(format_exact(Timestamp)).
 
 -spec parse (binary() | string()) -> datetime().
 %% @doc Convert an ISO 8601 formatted string to a `{date(), time()}' tuple
-parse(Bin) when is_binary(Bin) ->
-    parse(binary_to_list(Bin));
-parse(Str) ->
-    {{Date, {H, M, S}}, Subsecond} = year(Str, []),
-    {Date, {H, M, S + round(Subsecond)}}.
+parse(Input) ->
+    {DT, _OffsetSec} = parse_local(Input),
+    DT.
+    
+-spec parse_local (binary() | string()) -> {datetime(), offset()}.
+%% @doc Convert an ISO 8601 formatted string to a `{date(), time()}' tuple
+parse_local(Bin) when is_binary(Bin) ->
+    parse_local(binary_to_list(Bin));
+parse_local(Str) ->
+    {{{Date, {H, M, S}}, LocalToUTCOffsetSec}, Subsecond} = year(Str, []),
+    {{Date, {H, M, S + round(Subsecond)}}, -LocalToUTCOffsetSec}.
 
 -spec parse_exact (binary() | string()) -> datetime_exact().
 %% @doc Convert an ISO 8601 formatted string to a `{date(), time()}'
 %% tuple with seconds precision to 3 decimal palces
-parse_exact(Bin) when is_binary(Bin) ->
-    parse_exact(binary_to_list(Bin));
-parse_exact(Str) ->
-    {{Date, {H, M, S}}, SecondsDecimal} = year(Str, []),
-    {Date, {H, M, S + SecondsDecimal}}.
+parse_exact(Input) ->
+    {DT, _OffsetSec} = parse_local_exact(Input),
+    DT.
+    
+-spec parse_local_exact (binary() | string()) -> {datetime_exact(), offset()}.
+%% @doc Convert an ISO 8601 formatted string to a `{date(), time()}'
+%% tuple with seconds precision to 3 decimal palces
+parse_local_exact(Bin) when is_binary(Bin) ->
+    parse_local_exact(binary_to_list(Bin));
+parse_local_exact(Str) ->
+    {{{Date, {H, M, S}}, LocalToUTCOffsetSec}, SecondsDecimal} = year(Str, []),
+    {{Date, {H, M, S + SecondsDecimal}}, -LocalToUTCOffsetSec}.
 
 -spec parse_exact_to_now (binary() | string()) -> tuple().
 %% @doc Convert an ISO 8601 formatted string to a
@@ -87,7 +138,7 @@ parse_exact(Str) ->
 parse_exact_to_now(Bin) when is_binary(Bin) ->
     parse_exact_to_now(binary_to_list(Bin));
 parse_exact_to_now(Str) ->
-    {Datetime, SecondsDecimal} = year(Str, []),
+    {{Datetime, _OffsetSec}, SecondsDecimal} = year(Str, []),
     Greg = calendar:datetime_to_gregorian_seconds(Datetime),
     UnixSeconds = Greg - 62167219200,
     E6 = 1000000,
@@ -250,7 +301,7 @@ add_decimal(Datetime, Plist) ->
 datetime(Plist) ->
     {Date, WeekOffsetH} = make_date(Plist),
     Time = {?V(hour, Plist, 0), ?V(minute, Plist, 0), ?V(second, Plist, 0)},
-    Datetime = add_decimal({Date, Time}, Plist),
+    {Datetime, _} = add_decimal({Date, Time}, Plist),
     OffsetSign = ?V(offset_sign, Plist, 1),
     OffsetH = -1 * OffsetSign * ?V(offset_hour, Plist, 0),
     OffsetM = -1 * OffsetSign * ?V(offset_minute, Plist, 0),
@@ -302,11 +353,11 @@ date_at_w01_1(Year) ->
         7 -> {Year, 1, 2}
     end.
 
--spec apply_offset (datetime(), number(), number(), number()) -> datetime().
+-spec apply_offset (datetime(), number(), number(), number()) -> {datetime(), integer()}.
 %% @doc Add the specified number of hours, minutes and seconds to `Datetime'.
 %% Punts on sub-second precision for now by rounding the total of the number of
 %% seconds in the offset before adding.
 apply_offset(Datetime, H, M, S) ->
-    OffsetS = S + (60 * (M + (60 * H))),
-    Gs = round(OffsetS) + calendar:datetime_to_gregorian_seconds(Datetime),
-    calendar:gregorian_seconds_to_datetime(Gs).
+    OffsetS = round(S + (60 * (M + (60 * H)))),
+    Gs = OffsetS + calendar:datetime_to_gregorian_seconds(Datetime),
+    {calendar:gregorian_seconds_to_datetime(Gs), OffsetS}.
