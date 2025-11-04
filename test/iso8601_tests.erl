@@ -116,3 +116,123 @@ parse_offset_test_() ->
       ?_assertMatch({{2012,2,3},{15,9,7}}, F("20120203T200506.50+0456"))},
      {"parses YYYYMMDDTHHMMSS.ss+0400",
       ?_assertMatch({{2012,2,3},{17,11,7}}, F("20120203T040506.50-1306"))}].
+
+format_test_() ->
+    F = fun iso8601:format/1,
+    [{"formats Erlang now timestamp",
+      ?_assertMatch(<<"2025-11-03T14:08:56Z">>, F({1762,178936,349362}))},
+     {"formats Erlang datetime",
+      ?_assertMatch(<<"2025-11-03T14:08:56Z">>, F({{2025,11,3},{14,8,56}}))}].
+
+format_local_test_() ->
+    F = fun iso8601:format/2,
+    [{"formats Erlang now timestamp as Zulu",
+      ?_assertMatch(<<"2025-11-03T14:08:56Z">>, F({1762,178936,349362}, "Z"))},
+     {"formats Erlang datetime as Zulu",
+      ?_assertMatch(<<"2025-11-03T14:08:56Z">>, F({{2025,11,3},{14,8,56}}, "Z"))},
+     {"formats Erlang now timestamp with applied offset",
+       ?_assertMatch(<<"2025-11-03T09:08:56-05:00">>, F({1762,178936,349362}, -18000))},
+     {"formats Erlang datetime with applied offset",
+       ?_assertMatch(<<"2025-11-03T09:08:56-05:00">>, F({{2025,11,3},{14,8,56}}, -18000))},
+     {"formats Erlang now timestamp with string offset",
+       ?_assertMatch(<<"2025-11-03T14:08:56-05:00">>, F({1762,178936,349362}, "-05:00"))},
+     {"formats Erlang datetime with string offset",
+       ?_assertMatch(<<"2025-11-03T14:08:56-05:00">>, F({{2025,11,3},{14,8,56}}, "-05:00"))}].
+    
+format_exact_test_() ->
+    F = fun iso8601:format_exact/1,
+    [{"formats Erlang now timestamp",
+      ?_assertMatch(<<"2025-11-03T14:08:56.349362Z">>, F({1762,178936,349362}))},
+     {"formats Erlang datetime",
+      ?_assertMatch(<<"2025-11-03T14:08:56Z">>, F({{2025,11,3},{14,8,56}}))},
+     {"formats Erlang datetime with fractional seconds",
+      ?_assertMatch(<<"2025-11-03T14:08:56.349362Z">>, F({{2025,11,3},{14,8,56.349362}}))}].
+
+format_local_exact_test_() ->
+    F = fun iso8601:format_exact/2,
+    [{"formats Erlang now timestamp as Zulu",
+      ?_assertMatch(<<"2025-11-03T14:08:56.349362Z">>, F({1762,178936,349362}, "Z"))},
+     {"formats Erlang datetime with as Zulu",
+      ?_assertMatch(<<"2025-11-03T14:08:56Z">>, F({{2025,11,3},{14,8,56}}, "Z"))},
+     {"formats Erlang datetime with fractional seconds as Zulu",
+      ?_assertMatch(<<"2025-11-03T14:08:56.349362Z">>, F({{2025,11,3},{14,8,56.349362}}, "Z"))},
+     {"formats Erlang now timestamp with applied offset",
+       ?_assertMatch(<<"2025-11-03T09:08:56.349362-05:00">>, F({1762,178936,349362}, -18000))},
+     {"formats Erlang datetime with applied offset",
+       ?_assertMatch(<<"2025-11-03T09:08:56-05:00">>, F({{2025,11,3},{14,8,56}}, -18000))},
+     {"formats Erlang datetime with fractional seconds and applied offset",
+       ?_assertMatch(<<"2025-11-03T09:08:56.349362-05:00">>, F({{2025,11,3},{14,8,56.349362}}, -18000))},
+     {"formats Erlang now timestamp with string offset",
+       ?_assertMatch(<<"2025-11-03T14:08:56.349362-05:00">>, F({1762,178936,349362}, "-05:00"))},
+     {"formats Erlang datetime with string offset",
+       ?_assertMatch(<<"2025-11-03T14:08:56-05:00">>, F({{2025,11,3},{14,8,56}}, "-05:00"))},
+     {"formats Erlang datetime with fractional seconds and string offset",
+       ?_assertMatch(<<"2025-11-03T14:08:56.349362-05:00">>, F({{2025,11,3},{14,8,56.349362}}, "-05:00"))}].
+
+parse_test_() ->
+    F = fun iso8601:parse/1,
+    [
+        {"parses",
+            ?_assertMatch({{2025,11,3},{14,8,56}}, F(<<"2025-11-03T14:08:56Z">>))},
+        {"ignores fractional seconds",
+            ?_assertMatch({{2025,11,3},{14,8,56}}, F(<<"2025-11-03T14:08:56.349362Z">>))},
+        {"applies offset",
+            ?_assertMatch({{2025,11,3},{14,8,56}}, F(<<"2025-11-03T09:08:56-05:00">>))},
+        {"applies offset, ignores fractional seconds",
+            ?_assertMatch({{2025,11,3},{14,8,56}}, F(<<"2025-11-03T09:08:56.349362-05:00">>))}
+    ].
+    
+parse_local_test_() ->
+    F = fun iso8601:parse_local/1,
+    [
+        {"parses",
+            ?_assertMatch({{{2025,11,3},{14,8,56}}, 0}, F(<<"2025-11-03T14:08:56Z">>))},
+        {"ignores fractional seconds",
+            ?_assertMatch({{{2025,11,3},{14,8,56}}, 0}, F(<<"2025-11-03T14:08:56.349362Z">>))},
+        {"applies offset",
+            ?_assertMatch({{{2025,11,3},{14,8,56}}, -18000}, F(<<"2025-11-03T09:08:56-05:00">>))},
+        {"applies offset, ignores fractional seconds",
+            ?_assertMatch({{{2025,11,3},{14,8,56}}, -18000}, F(<<"2025-11-03T09:08:56.349362-05:00">>))}
+    ].
+
+parse_exact_test_() ->
+    F = fun iso8601:parse_exact/1,
+    [
+        {"parses",
+            ?_assertMatch({{2025,11,3},{14,8,56.0}}, F(<<"2025-11-03T14:08:56Z">>))},
+        {"parses fractional seconds",
+            ?_assertMatch({{2025,11,3},{14,8,56.349362}}, F(<<"2025-11-03T14:08:56.349362Z">>))},
+        {"applies offset",
+            ?_assertMatch({{2025,11,3},{14,8,56.0}}, F(<<"2025-11-03T09:08:56-05:00">>))},
+        {"applies offset, parses fractional seconds",
+            ?_assertMatch({{2025,11,3},{14,8,56.349362}}, F(<<"2025-11-03T09:08:56.349362-05:00">>))}
+    ].
+
+parse_local_exact_test_() ->
+    F = fun iso8601:parse_local_exact/1,
+    [
+        {"parses",
+            ?_assertMatch({{{2025,11,3},{14,8,56.0}}, 0}, F(<<"2025-11-03T14:08:56Z">>))},
+        {"parses fractional seconds",
+            ?_assertMatch({{{2025,11,3},{14,8,56.349362}}, 0}, F(<<"2025-11-03T14:08:56.349362Z">>))},
+        {"applies offset",
+            ?_assertMatch({{{2025,11,3},{14,8,56.0}}, -18000}, F(<<"2025-11-03T09:08:56-05:00">>))},
+        {"applies offset, parses fractional seconds",
+            ?_assertMatch({{{2025,11,3},{14,8,56.349362}}, -18000}, F(<<"2025-11-03T09:08:56.349362-05:00">>))}
+    ].
+    
+inverses_test_() ->
+    [
+        {"parse and format",
+            ?_assertMatch(<<"2025-11-03T09:08:56.349362-05:00">>, parse_and_format(<<"2025-11-03T09:08:56.349362-05:00">>))},
+        {"format and parse",
+            ?_assertMatch({{{2025,11,3},{14,8,56.349362}}, -18000}, format_and_parse({{2025,11,3},{14,8,56.349362}}, -18000))}
+    ].
+
+parse_and_format(Input) ->
+    {UtcExact, OffsetSec} = iso8601:parse_local_exact(Input),
+    iso8601:format_exact(UtcExact, OffsetSec).
+
+format_and_parse(Input, OffsetSec) ->
+    Fmt = iso8601:format_exact(Input, OffsetSec),
+    iso8601:parse_local_exact(Fmt).
